@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>控制理论知识图谱 · Control Theory Atlas</title>
+<link rel="stylesheet" href="assets/katex/katex.min.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="topbar">
+  <div class="brand" id="brand-home" title="回到图谱">
+    <span class="brand-mark">⌘</span>
+    <span class="brand-text">控制理论知识图谱 <small>Control Theory Atlas</small></span>
+  </div>
+  <input id="search" type="text" placeholder="搜索理论… (如 LQR / 滑模 / Kalman)" autocomplete="off">
+  <div id="search-results"></div>
+  <button id="btn-path" title="按推荐顺序学习">📜 学习路线</button>
+</header>
+
+<main id="main">
+  <!-- 图谱视图 -->
+  <section id="graph-view">
+    <svg id="graph-svg"></svg>
+    <aside id="legend"></aside>
+    <div id="graph-hint">自上而下：研究方向 → 问题 → 方案 → 知识层⑦→①（箭头 = 拆解/依赖）· 拖动平移 · 滚轮缩放 · 点击节点查看详情</div>
+  </section>
+
+  <!-- 详情视图 -->
+  <section id="detail-view" hidden>
+    <article id="detail-article"></article>
+  </section>
+
+  <!-- 学习路线视图 -->
+  <section id="path-view" hidden>
+    <div id="path-list"></div>
+  </section>
+
+</main>
+
+<script src="assets/katex/katex.min.js"></script>
+<script src="assets/katex/contrib/auto-render.min.js"></script>
+<script src="data/nodes.js"></script>
+<script src="data/problems.js"></script>
+<script src="data/content/math.js"></script>
+<script src="data/content/stability.js"></script>
+<script src="data/content/structure.js"></script>
+<script src="data/content/classical.js"></script>
+<script src="data/content/optimal.js"></script>
+<script src="data/content/nonlinear.js"></script>
+<script src="data/content/advanced.js"></script>
+<script src="data/content/extras.js"></script>
+<script src="data/content/extras2.js"></script>
+<script src="js/sim-engine.js"></script>
+<script src="js/sims.js"></script>
+<script src="js/graph.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
