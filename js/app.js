@@ -294,9 +294,16 @@
   /* ── 统一分发 ── */
   function open(id) {
     if (byId[id]) return openNode(id);
-    if (probById[id]) return openProblem(id);
+    // 打开问题/方向详情时，同步图谱页签，返回图谱即停在对应方向页
+    if (probById[id]) { window.Graph.setDomain(probById[id].domain); return openProblem(id); }
     if (solById[id]) return openSolution(id);
-    if (domById[id]) return openDomain(id);
+    if (domById[id]) { window.Graph.setDomain(id); return openDomain(id); }
+  }
+
+  function backToGraph() {
+    window.Sims && window.Sims.stopAll();
+    show("graph");
+    window.Graph.shown();
   }
 
   /* ── 事件委托 ── */
@@ -304,10 +311,10 @@
     const go = e.target.closest("[data-goto]");
     if (go) { open(go.dataset.goto); return; }
     const back = e.target.closest("[data-goto-graph]");
-    if (back) { window.Sims && window.Sims.stopAll(); show("graph"); return; }
+    if (back) { backToGraph(); return; }
   });
 
-  $("#brand-home").onclick = () => { window.Sims && window.Sims.stopAll(); show("graph"); };
+  $("#brand-home").onclick = backToGraph;
 
   /* ── 学习路线 ── */
   $("#btn-path").onclick = () => {

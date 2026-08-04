@@ -19,11 +19,14 @@
 </header>
 
 <main id="main">
-  <!-- 图谱视图 -->
+  <!-- 图谱视图：四个方向页签 + 排序切换 -->
   <section id="graph-view">
-    <svg id="graph-svg"></svg>
-    <aside id="legend"></aside>
-    <div id="graph-hint">自上而下：研究方向 → 问题 → 方案 → 知识层⑦→①（箭头 = 拆解/依赖）· 拖动平移 · 滚轮缩放 · 点击节点查看详情</div>
+    <div id="graph-tabs"></div>
+    <div id="graph-stage">
+      <svg id="graph-svg"></svg>
+      <aside id="legend"></aside>
+      <div id="graph-hint"></div>
+    </div>
   </section>
 
   <!-- 详情视图 -->

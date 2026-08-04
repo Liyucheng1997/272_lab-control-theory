@@ -1,6 +1,7 @@
-/* 知识图谱渲染（自上而下）：
- * 列结构：🎯研究方向 → ❓控制问题 → 🛠解决方案 → ⑦鲁棒与先进 → … → ①建模基础
- * 所有箭头统一含义：拆解 / 依赖（左边的大问题被拆成右边更小的知识点）
+/* 知识图谱渲染：四个研究方向各一页（页签切换），每页只画该方向的问题、方案与知识闭包。
+ * 两种排序：
+ *   自上而下（down）：❓控制问题 → 🛠解决方案 → 知识层 ⑦→①（箭头 = 拆解/依赖）
+ *   自下而上（up）  ：知识层 ①→⑦ → 🛠解决方案 → ❓控制问题（箭头 = 支撑/通往）
  */
 window.Graph = (function () {
   const SVGNS = "http://www.w3.org/2000/svg";
@@ -14,56 +15,72 @@ window.Graph = (function () {
     "d-uav": "#7048e8",
   };
   const SOL_COLOR = "#64748b";
+  const TAB_ORDER = ["d-ad", "d-robot", "d-uav", "d-vehicle"];
 
-  let svg, viewport, state;
+  let svg, viewport, state, onNodeClickCb;
+  let curDomain = "d-ad", curOrder = "up";
+  let legendOpen = false;
+  const hiddenCats = new Set();
 
-  /* ── 组装完整图：问题层 + 知识层（知识边反向 = 依赖方向） ── */
-  function buildGraph() {
+  /* ── 组装单方向子图 ── */
+  function buildGraph(domainId, order) {
     const P = window.KG_PROBLEMS, K = window.KG;
-    const cols = [];
-    const nodes = [];
-    const edges = [];
+    const dom = P.domains.find(d => d.id === domainId);
+    const color = DOMAIN_COLORS[domainId] || "#888";
+    const problems = P.problems.filter(p => p.domain === domainId);
+    const solIds = [...new Set(problems.flatMap(p => p.solutions.map(s => s.ref)))];
+    const sols = solIds.map(id => P.solutions.find(s => s.id === id));
 
-    // 列 0：研究方向
-    cols.push("🎯 研究方向");
-    P.domains.forEach(d => nodes.push({
-      id: d.id, title: d.icon + " " + d.name, en: "研究方向 · Domain",
-      color: DOMAIN_COLORS[d.id] || "#888", col: 0, kind: "domain"
-    }));
+    // 知识闭包：方案直接依赖 + 依赖的全部前置
+    const preds = {};
+    K.nodes.forEach(n => preds[n.id] = []);
+    K.edges.forEach(([a, b]) => preds[b].push(a));
+    const closure = new Set();
+    const stack = sols.flatMap(s => [...s.uses]);
+    while (stack.length) {
+      const id = stack.pop();
+      if (closure.has(id)) continue;
+      closure.add(id);
+      (preds[id] || []).forEach(p => stack.push(p));
+    }
+    const kNodes = K.nodes.filter(n => closure.has(n.id));
+    const tiersAsc = [...new Set(kNodes.map(n => n.tier))].sort((a, b) => a - b);
 
-    // 列 1：控制问题（继承所属方向颜色）
-    cols.push("❓ 控制问题");
-    P.problems.forEach(p => {
-      const dom = P.domains.find(d => d.id === p.domain);
-      nodes.push({
-        id: p.id, title: p.title, en: dom.icon + " " + dom.name,
-        color: DOMAIN_COLORS[p.domain] || "#888", col: 1, kind: "problem"
-      });
-      edges.push([p.domain, p.id]);
-    });
-
-    // 列 2：解决方案
-    cols.push("🛠 解决方案");
-    P.solutions.forEach(s => nodes.push({
-      id: s.id, title: s.name, en: "方案 · Solution",
-      color: SOL_COLOR, col: 2, kind: "solution"
-    }));
-    P.problems.forEach(p => p.solutions.forEach(s => edges.push([p.id, s.ref])));
-    P.solutions.forEach(s => s.uses.forEach(u => edges.push([s.id, u])));
-
-    // 列 3+：知识层，⑦ → ①（越右越基础，拆到最小知识点）
-    const tierKeys = Object.keys(K.tiers).map(Number).sort((a, b) => b - a);
-    tierKeys.forEach((t, i) => {
-      cols.push(K.tiers[t]);
-      K.nodes.filter(n => n.tier === t).forEach(n => nodes.push({
+    const probCol = {
+      label: "❓ 控制问题", prob: true,
+      items: problems.map(p => ({ id: p.id, title: p.title, en: dom.icon + " " + dom.name, color, kind: "problem" }))
+    };
+    const solCol = {
+      label: "🛠 解决方案", prob: true,
+      items: sols.map(s => ({ id: s.id, title: s.name, en: "方案 · Solution", color: SOL_COLOR, kind: "solution" }))
+    };
+    const tierCols = (order === "down" ? [...tiersAsc].reverse() : tiersAsc).map(t => ({
+      label: K.tiers[t],
+      items: kNodes.filter(n => n.tier === t).map(n => ({
         id: n.id, title: n.title, en: n.en,
-        color: K.categories[n.cat].color, col: 3 + i, kind: "knowledge", cat: n.cat
-      }));
-    });
-    // 知识依赖边反向绘制：B 依赖 A ⇒ B → A（与拆解方向一致）
-    K.edges.forEach(([a, b]) => edges.push([b, a]));
+        color: K.categories[n.cat].color, kind: "knowledge", cat: n.cat
+      }))
+    }));
 
-    return { cols, nodes, edges };
+    const colDefs = order === "down" ? [probCol, solCol, ...tierCols] : [...tierCols, solCol, probCol];
+    const cols = [], nodes = [], edges = [];
+    colDefs.forEach((c, ci) => {
+      cols.push({ label: c.label, prob: !!c.prob });
+      c.items.forEach(it => nodes.push({ ...it, col: ci }));
+    });
+
+    // 边统一按绘制方向（左 → 右）给出
+    if (order === "down") {
+      problems.forEach(p => p.solutions.forEach(s => edges.push([p.id, s.ref])));
+      sols.forEach(s => s.uses.forEach(u => edges.push([s.id, u])));
+      K.edges.forEach(([a, b]) => { if (closure.has(a) && closure.has(b)) edges.push([b, a]); });
+    } else {
+      K.edges.forEach(([a, b]) => { if (closure.has(a) && closure.has(b)) edges.push([a, b]); });
+      sols.forEach(s => s.uses.forEach(u => edges.push([u, s.id])));
+      problems.forEach(p => p.solutions.forEach(s => edges.push([s.ref, p.id])));
+    }
+
+    return { cols, nodes, edges, dom };
   }
 
   function computeLayout(graph) {
@@ -107,12 +124,69 @@ window.Graph = (function () {
     return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
   }
 
-  function render(onNodeClick) {
+  /* ── 页签栏（方向切换 + 排序切换） ── */
+  function renderTabs() {
+    const box = document.getElementById("graph-tabs");
+    if (!box) return;
+    const P = window.KG_PROBLEMS;
+    box.innerHTML = "";
+
+    const row = document.createElement("div");
+    row.className = "gt-row";
+
+    const tabsWrap = document.createElement("div");
+    tabsWrap.className = "gt-domains";
+    TAB_ORDER.forEach(id => {
+      const d = P.domains.find(x => x.id === id);
+      if (!d) return;
+      const btn = document.createElement("button");
+      btn.className = "gt-tab" + (id === curDomain ? " active" : "");
+      btn.style.setProperty("--c", DOMAIN_COLORS[id]);
+      btn.textContent = d.icon + " " + d.name;
+      btn.onclick = () => setDomain(id);
+      tabsWrap.appendChild(btn);
+    });
+    row.appendChild(tabsWrap);
+
+    const toggle = document.createElement("div");
+    toggle.className = "gt-order";
+    [["up", "⬆ 自下而上 · 基础→问题"], ["down", "⬇ 自上而下 · 问题→基础"]].forEach(([o, label]) => {
+      const btn = document.createElement("button");
+      btn.className = o === curOrder ? "active" : "";
+      btn.textContent = label;
+      btn.onclick = () => setOrder(o);
+      toggle.appendChild(btn);
+    });
+    row.appendChild(toggle);
+    box.appendChild(row);
+
+    const dom = P.domains.find(d => d.id === curDomain);
+    const desc = document.createElement("div");
+    desc.className = "gt-desc";
+    desc.innerHTML = `<span class="gt-desc-link" data-goto="${curDomain}">${dom.icon} ${dom.name} 总览 →</span> ${dom.desc}`;
+    box.appendChild(desc);
+  }
+
+  function setDomain(id) {
+    if (!DOMAIN_COLORS[id] || id === curDomain) return;
+    curDomain = id;
+    renderTabs();
+    renderGraph();
+  }
+  function setOrder(o) {
+    if (o === curOrder) return;
+    curOrder = o;
+    renderTabs();
+    renderGraph();
+  }
+
+  /* ── 绘制当前页 ── */
+  function renderGraph() {
     svg = document.getElementById("graph-svg");
     svg.innerHTML = "";
-    const graph = buildGraph();
+    const graph = buildGraph(curDomain, curOrder);
     const layout = computeLayout(graph);
-    state = { graph, layout, tx: 20, ty: 0, scale: 1, hiddenCats: new Set() };
+    state = { graph, layout, tx: 20, ty: 0, scale: 1 };
 
     const defs = el("defs", {}, svg);
     const marker = el("marker", {
@@ -129,7 +203,7 @@ window.Graph = (function () {
     const { pos } = layout;
 
     // 条带 + 列头
-    graph.cols.forEach((label, ci) => {
+    graph.cols.forEach((c, ci) => {
       const x = 60 + ci * COL_GAP;
       if (ci % 2 === 1) {
         el("rect", {
@@ -137,10 +211,9 @@ window.Graph = (function () {
           fill: "rgba(53,101,201,0.045)", rx: 16
         }, bandLayer);
       }
-      // 问题层三列用不同色调的列头
-      const cls = ci <= 2 ? "g-tier g-tier-prob" : "g-tier";
+      const cls = c.prob ? "g-tier g-tier-prob" : "g-tier";
       const txt = el("text", { x: x + NODE_W / 2, y: 34, "text-anchor": "middle", class: cls }, bandLayer);
-      txt.textContent = label;
+      txt.textContent = c.label;
       if (ci > 0) {
         const ax = x - COL_GAP + NODE_W + (COL_GAP - NODE_W) / 2;
         const t2 = el("text", { x: ax, y: 34, "text-anchor": "middle", class: "g-tier-arrow" }, bandLayer);
@@ -171,14 +244,29 @@ window.Graph = (function () {
       const t2 = el("text", { x: 14, y: 40, class: "g-en" }, g); t2.textContent = n.en;
       fitText(t2, NODE_W - 22);
 
-      g.addEventListener("click", () => { if (!state.wasPan) onNodeClick(n.id); });
+      g.addEventListener("click", () => { if (!state.wasPan) onNodeClickCb(n.id); });
       g.addEventListener("mouseenter", () => highlight(n.id, edgeEls, layout));
       g.addEventListener("mouseleave", () => highlight(null, edgeEls, layout));
     });
 
+    // 重新应用分类过滤
+    if (hiddenCats.size) {
+      document.querySelectorAll(".g-node").forEach(n =>
+        n.classList.toggle("dimmed", hiddenCats.has(n.dataset.cat)));
+    }
+
     setupPanZoom();
     renderLegend();
+    renderHint();
     fitToScreen();
+  }
+
+  function renderHint() {
+    const hint = document.getElementById("graph-hint");
+    if (!hint) return;
+    hint.textContent = curOrder === "down"
+      ? "自上而下：❓问题 → 🛠方案 → 知识层⑦→①（箭头 = 拆解/依赖）· 拖动平移 · 滚轮缩放 · 点击节点查看详情"
+      : "自下而上：知识层①→⑦ → 🛠方案 → ❓问题（箭头 = 支撑/通往）· 拖动平移 · 滚轮缩放 · 点击节点查看详情";
   }
 
   function fitText(textEl, maxW) {
@@ -201,6 +289,9 @@ window.Graph = (function () {
     if (!id) {
       nodes.forEach(n => n.classList.remove("dimmed"));
       edgeEls.forEach(e => e.classList.remove("hl"));
+      if (hiddenCats.size) {
+        nodes.forEach(n => n.classList.toggle("dimmed", hiddenCats.has(n.dataset.cat)));
+      }
       return;
     }
     const related = new Set([id, ...(layout.preds[id] || []), ...(layout.succs[id] || [])]);
@@ -215,6 +306,7 @@ window.Graph = (function () {
   function setupPanZoom() {
     let dragging = false, lx = 0, ly = 0;
     svg.addEventListener("mousedown", e => {
+      e.preventDefault(); // 阻止拖拽时选中节点文字
       dragging = true; state.wasPan = false; lx = e.clientX; ly = e.clientY;
       svg.classList.add("dragging");
     });
@@ -249,11 +341,14 @@ window.Graph = (function () {
   }
 
   function fitToScreen() {
+    if (!state) return;
+    const rect = svg.getBoundingClientRect();
+    if (rect.width < 10 || rect.height < 10) { state.needsFit = true; return; } // 视图隐藏时跳过，显示时再调用
+    state.needsFit = false;
     const { pos } = state.layout;
     let maxX = 0, maxY = 0;
     Object.values(pos).forEach(p => { maxX = Math.max(maxX, p.x + NODE_W); maxY = Math.max(maxY, p.y + NODE_H); });
     maxX += 30; maxY += 20;
-    const rect = svg.getBoundingClientRect();
     const s = Math.min((rect.width - 40) / maxX, (rect.height - 40) / maxY, 1.15);
     state.scale = s;
     state.tx = (rect.width - maxX * s) / 2 + 10;
@@ -261,13 +356,28 @@ window.Graph = (function () {
     applyTransform();
   }
 
-  /* ── 图例 ── */
+  /* ── 图例（可折叠，默认收起，避免盖住节点） ── */
   function renderLegend() {
     const box = document.getElementById("legend");
-    box.innerHTML = "<h3>图谱结构</h3>";
-    const layers = [
-      ["🎯", "研究方向"], ["❓", "控制问题"], ["🛠", "解决方案"], ["📚", "知识层 ⑦→①（右端最基础）"],
-    ];
+    box.classList.toggle("collapsed", !legendOpen);
+    box.innerHTML = "";
+
+    const head = document.createElement("div");
+    head.className = "legend-head";
+    const hiddenNote = hiddenCats.size ? ` · 已隐藏 ${hiddenCats.size} 类` : "";
+    head.innerHTML = legendOpen
+      ? `🗂 图例与筛选 <span class="legend-toggle">收起 ×</span>`
+      : `🗂 图例与筛选${hiddenNote}`;
+    head.onclick = () => { legendOpen = !legendOpen; renderLegend(); };
+    box.appendChild(head);
+    if (!legendOpen) return;
+
+    const h0 = document.createElement("h3");
+    h0.textContent = "本页结构";
+    box.appendChild(h0);
+    const layers = curOrder === "down"
+      ? [["❓", "控制问题"], ["🛠", "解决方案"], ["📚", "知识层 ⑦→①（右端最基础）"]]
+      : [["📚", "知识层 ①→⑦（左端最基础）"], ["🛠", "解决方案"], ["❓", "控制问题"]];
     layers.forEach(([ic, name]) => {
       const item = document.createElement("div");
       item.className = "legend-item";
@@ -282,17 +392,29 @@ window.Graph = (function () {
     Object.entries(window.KG.categories).forEach(([key, c]) => {
       const item = document.createElement("div");
       item.className = "legend-item";
+      if (hiddenCats.has(key)) item.classList.add("off");
       item.innerHTML = `<span class="legend-dot" style="background:${c.color}"></span>${c.name}`;
       item.onclick = () => {
-        if (state.hiddenCats.has(key)) state.hiddenCats.delete(key);
-        else state.hiddenCats.add(key);
-        item.classList.toggle("off", state.hiddenCats.has(key));
+        if (hiddenCats.has(key)) hiddenCats.delete(key);
+        else hiddenCats.add(key);
+        item.classList.toggle("off", hiddenCats.has(key));
         document.querySelectorAll(".g-node").forEach(n =>
-          n.classList.toggle("dimmed", state.hiddenCats.has(n.dataset.cat)));
+          n.classList.toggle("dimmed", hiddenCats.has(n.dataset.cat)));
       };
       box.appendChild(item);
     });
   }
 
-  return { render, fitToScreen };
+  function render(onNodeClick) {
+    onNodeClickCb = onNodeClick;
+    renderTabs();
+    renderGraph();
+  }
+
+  // 图谱视图重新显示时调用：仅当隐藏期间发生过重绘才重新适配视野
+  function shown() {
+    if (state && state.needsFit) fitToScreen();
+  }
+
+  return { render, fitToScreen, setDomain, setOrder, shown };
 })();
