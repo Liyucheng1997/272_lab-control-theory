@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>控制之美 · 交互课程</title>
+<link rel="stylesheet" href="assets/katex/katex.min.css">
+<link rel="stylesheet" href="course/course.css">
+<script>
+  try { const t = localStorage.getItem("cb-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body>
+<header id="topbar">
+  <button id="menu-btn" class="top-btn" aria-label="目录">☰</button>
+  <a class="brand" href="#/">
+    <span class="brand-mark">控</span>
+    <span><b>控制之美 · 交互课程</b><small>从传递函数到 MPC 与卡尔曼滤波</small></span>
+  </a>
+  <div id="progress-wrap"><div id="progress-bar"><div id="progress-fill"></div></div><span id="progress-text"></span></div>
+  <button id="theme-btn" class="top-btn" title="切换深浅色">◐</button>
+  <a class="top-btn" href="index.html" title="打开知识图谱">🗺 知识图谱</a>
+</header>
+<nav id="sidebar"></nav>
+<main id="main"><div class="page" id="page"></div></main>
+
+<script src="assets/katex/katex.min.js"></script>
+<script src="assets/katex/contrib/auto-render.min.js"></script>
+<script src="course/engine.js"></script>
+<script src="course/app.js"></script>
+<script src="course/figs.js"></script>
+<script src="course/lessons/v1-basics.js"></script>
+<script src="course/lessons/v1-statespace.js"></script>
+<script src="course/lessons/v1-response.js"></script>
+<script src="course/lessons/v1-design.js"></script>
+<script src="course/lessons/v1-frequency.js"></script>
+<script src="course/lessons/v1-modern.js"></script>
+<script src="course/lessons/v2-math.js"></script>
+<script src="course/lessons/v2-optimal.js"></script>
+<script src="course/lessons/v2-mpc.js"></script>
+<script src="course/lessons/v2-kalman.js"></script>
+<script>Course.start();</script>
+</body>
+</html>

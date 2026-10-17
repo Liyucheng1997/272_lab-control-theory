@@ -64,6 +64,11 @@ body {
   white-space: nowrap;
 }
 #btn-path:hover { border-color: var(--accent); color: var(--accent); }
+#btn-course {
+  background: var(--accent); color: #fff; border: 1px solid var(--accent);
+  border-radius: 8px; padding: 8px 14px; font-size: .9rem; white-space: nowrap; text-decoration: none;
+}
+#btn-course:hover { filter: brightness(1.08); }
 
 /* ── 主区域 ── */
 #main { flex: 1; position: relative; overflow: hidden; }
